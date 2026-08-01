@@ -1,4 +1,6 @@
-# Villagading
+# Villa Gading Admin
+
+This repository deploys the protected admin build for `admin.villagading.com`. The workflow sets `VITE_ADMIN_ONLY=true`; authorization is enforced by Supabase Authentication and database RLS, not by the hostname.
 
 [![Open in Bolt](https://bolt.new/static/open-in-bolt.svg)](https://bolt.new/~/sb1-yznmvwzd)
 

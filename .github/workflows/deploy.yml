@@ -35,6 +35,7 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_URL: /
+          VITE_ADMIN_ONLY: "true"
           VITE_SUPABASE_URL: https://qbjyjkeflhkepprtlfiq.supabase.co
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
