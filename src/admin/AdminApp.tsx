@@ -46,8 +46,7 @@ function Login({ onAuthenticated }: { onAuthenticated: () => Promise<void> }) {
       <form onSubmit={submit} className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
         <ShieldCheck className="mx-auto mb-4 h-10 w-10" />
         <h1 className="text-center font-serif text-3xl">Villa Gading Admin</h1>
-        <p className="mb-2 mt-2 text-center text-sm text-gray-500">Sign in with an authorized administrator account.</p>
-        <p className="mb-7 text-center text-xs text-gray-400">Use the password created for this admin account in Supabase, not your Gmail password.</p>
+        <p className="mb-7 mt-2 text-center text-sm text-gray-500">Sign in with an authorized administrator account.</p>
         {error && <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
         <label className="mb-2 block text-sm font-medium">Email</label>
         <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} className="mb-4 w-full rounded-xl border p-3" />
