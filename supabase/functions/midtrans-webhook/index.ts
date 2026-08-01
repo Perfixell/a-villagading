@@ -120,6 +120,7 @@ async function sendConfirmationEmail(
     body: JSON.stringify({
       from: fromEmail,
       to: [booking.email],
+      bcc: ["villagading27@gmail.com"],
       subject: `Booking confirmed: ${booking.booking_reference}`,
       html: `
         <div style="font-family: Arial, sans-serif; line-height: 1.5; color: #111827;">
