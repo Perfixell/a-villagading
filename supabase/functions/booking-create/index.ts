@@ -32,6 +32,12 @@ type CreateBookingPayload = {
   turnstile_token?: string;
 };
 
+type StoredBookingPayload = CreateBookingPayload & {
+  booking_reference: string;
+  total_price: number;
+  payment_access_token_hash: string;
+};
+
 type BookingRow = {
   check_in: string;
   check_out: string;
@@ -144,7 +150,7 @@ async function fetchConflictingBookings(
 async function insertBooking(
   supabaseUrl: string,
   serviceRoleKey: string,
-  payload: CreateBookingPayload & { booking_reference: string; total_price: number },
+  payload: StoredBookingPayload,
 ) {
   const res = await fetch(`${supabaseUrl}/rest/v1/bookings`, {
     method: "POST",
@@ -215,6 +221,11 @@ async function validateTurnstile(token: string, secret: string) {
   );
 }
 
+async function sha256Hex(value: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 async function calculateAuthoritativePrice(
   supabaseUrl: string,
   serviceRoleKey: string,
@@ -271,7 +282,9 @@ Deno.serve(async (req: Request) => {
   try {
     const supabaseUrl = getEnv("SUPABASE_URL");
     const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
-    const turnstileSecret = Deno.env.get("TURNSTILE_SECRET_KEY")?.trim();
+    // This public function holds inventory, so a missing deployment secret
+    // must disable booking rather than silently disable bot protection.
+    const turnstileSecret = getEnv("TURNSTILE_SECRET_KEY");
 
     const contentLength = Number(req.headers.get("content-length") ?? "0");
     if (contentLength > 16_384) return json({ error: "Request is too large" }, 413);
@@ -302,13 +315,11 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Invalid booking details" }, 400);
     }
 
-    if (turnstileSecret) {
-      if (!payload.turnstile_token || payload.turnstile_token.length > 2048) {
-        return json({ error: "Security verification is required" }, 403);
-      }
-      if (!(await validateTurnstile(payload.turnstile_token, turnstileSecret))) {
-        return json({ error: "Security verification failed. Please try again." }, 403);
-      }
+    if (!payload.turnstile_token || payload.turnstile_token.length > 2048) {
+      return json({ error: "Security verification is required" }, 403);
+    }
+    if (!(await validateTurnstile(payload.turnstile_token, turnstileSecret))) {
+      return json({ error: "Security verification failed. Please try again." }, 403);
     }
 
     const totalPrice = await calculateAuthoritativePrice(
@@ -344,7 +355,8 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const bookingReference = `VG-${Date.now()}-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+    const bookingReference = `VG-${crypto.randomUUID().toUpperCase()}`;
+    const paymentToken = `${crypto.randomUUID()}${crypto.randomUUID()}`.replaceAll("-", "");
     await insertBooking(supabaseUrl, serviceRoleKey, {
       ...payload,
       guest_name: payload.guest_name.trim(),
@@ -353,12 +365,19 @@ Deno.serve(async (req: Request) => {
       turnstile_token: undefined,
       booking_reference: bookingReference,
       total_price: totalPrice,
+      payment_access_token_hash: await sha256Hex(paymentToken),
     });
 
-    return json({ ok: true, booking_reference: bookingReference, total_price: totalPrice }, 201);
+    return json({
+      ok: true,
+      booking_reference: bookingReference,
+      total_price: totalPrice,
+      payment_token: paymentToken,
+    }, 201);
   } catch (error) {
+    console.error("booking-create failed", error);
     return json(
-      { error: String(error instanceof Error ? error.message : error) },
+      { error: "Booking could not be created. Please try again." },
       500,
     );
   }

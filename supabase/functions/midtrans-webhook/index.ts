@@ -164,7 +164,14 @@ function mapStatuses(payload: MidtransWebhookPayload) {
   const status = payload.transaction_status;
 
   if (status === "settlement" || status === "capture") {
-    if (status === "capture" && payload.fraud_status === "challenge") {
+    if (status === "capture" && payload.fraud_status === "deny") {
+      return {
+        payment_status: "failed",
+        booking_status: "cancelled",
+      };
+    }
+
+    if (status === "capture" && payload.fraud_status !== "accept") {
       return {
         payment_status: "pending",
         booking_status: "pending_payment",
@@ -184,6 +191,18 @@ function mapStatuses(payload: MidtransWebhookPayload) {
     };
   }
 
+  if (
+    status === "refund" ||
+    status === "partial_refund" ||
+    status === "chargeback" ||
+    status === "partial_chargeback"
+  ) {
+    return {
+      payment_status: "refunded",
+      booking_status: "cancelled",
+    };
+  }
+
   if (status === "deny" || status === "expire" || status === "cancel") {
     return {
       payment_status: "failed",
@@ -191,10 +210,18 @@ function mapStatuses(payload: MidtransWebhookPayload) {
     };
   }
 
-  return {
-    payment_status: "pending",
-    booking_status: "pending_payment",
-  };
+  return null;
+}
+
+function constantTimeEqual(left: string, right: string) {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  let difference = leftBytes.length ^ rightBytes.length;
+  const length = Math.max(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index += 1) {
+    difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+  return difference === 0;
 }
 
 async function updateBookingFromWebhook(
@@ -237,6 +264,12 @@ Deno.serve(async (req: Request) => {
     const resendApiKey = Deno.env.get("RESEND_API_KEY") ?? "";
     const resendFromEmail = Deno.env.get("RESEND_FROM_EMAIL") ?? "";
 
+    const contentLength = Number(req.headers.get("content-length") ?? "0");
+    if (contentLength > 16_384) return json({ error: "Request is too large" }, 413);
+    if (!req.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
+      return json({ error: "Content-Type must be application/json" }, 415);
+    }
+
     const payload = (await req.json()) as MidtransWebhookPayload;
 
     if (
@@ -253,7 +286,7 @@ Deno.serve(async (req: Request) => {
       payload.order_id + payload.status_code + payload.gross_amount + midtransServerKey;
     const expectedSignature = await sha512Hex(rawSignature);
 
-    if (expectedSignature !== payload.signature_key) {
+    if (!constantTimeEqual(expectedSignature, payload.signature_key)) {
       return json({ error: "Invalid signature" }, 401);
     }
 
@@ -262,7 +295,26 @@ Deno.serve(async (req: Request) => {
       return json({ error: "Booking not found" }, 404);
     }
 
+    const notifiedAmount = Number(payload.gross_amount);
+    if (!Number.isFinite(notifiedAmount) || Math.round(notifiedAmount) !== Math.round(booking.total_price)) {
+      return json({ error: "Amount mismatch" }, 409);
+    }
+
     const statusPatch = mapStatuses(payload);
+    if (!statusPatch) {
+      console.warn("Ignoring unsupported Midtrans transaction status", payload.transaction_status);
+      return json({ ok: true });
+    }
+
+    // Midtrans can retry or deliver notifications out of order. A stale
+    // pending/failure notification must never undo an accepted payment.
+    // Refund and chargeback notifications remain valid after settlement.
+    if (
+      booking.payment_status === "paid" &&
+      (statusPatch.payment_status === "pending" || statusPatch.payment_status === "failed")
+    ) {
+      return json({ ok: true });
+    }
     const patchData: Record<string, unknown> = {
       ...statusPatch,
     };
@@ -294,9 +346,10 @@ Deno.serve(async (req: Request) => {
 
     return json({ ok: true });
   } catch (error) {
+    console.error("midtrans-webhook failed", error);
     return json(
       {
-        error: String(error instanceof Error ? error.message : error),
+        error: "Webhook could not be processed",
       },
       500,
     );

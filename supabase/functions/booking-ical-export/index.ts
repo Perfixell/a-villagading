@@ -5,23 +5,11 @@ declare const Deno: {
   serve: (handler: (req: Request) => Response | Promise<Response>) => void;
 };
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-  "Content-Type": "text/calendar; charset=utf-8",
-};
-
 type VillaId = 1 | 2;
-
-type BookingRow = {
-  check_in: string;
-  check_out: string;
-  booking_reference: string;
-  guest_name: string;
-};
+type BookingRow = { check_in: string; check_out: string };
 
 function getEnv(name: string) {
-  const value = Deno.env.get(name);
+  const value = Deno.env.get(name)?.trim();
   if (!value) throw new Error(`Missing environment variable ${name}`);
   return value;
 }
@@ -30,28 +18,37 @@ function toIcsDate(ymd: string) {
   return ymd.replaceAll("-", "");
 }
 
-function escapeIcs(value: string) {
-  return value.replaceAll("\\", "\\\\").replaceAll(";", "\\;").replaceAll(",", "\\,").replaceAll("\n", "\\n");
+function constantTimeEqual(left: string, right: string) {
+  const encoder = new TextEncoder();
+  const leftBytes = encoder.encode(left);
+  const rightBytes = encoder.encode(right);
+  let difference = leftBytes.length ^ rightBytes.length;
+  const length = Math.max(leftBytes.length, rightBytes.length);
+  for (let index = 0; index < length; index += 1) {
+    difference |= (leftBytes[index] ?? 0) ^ (rightBytes[index] ?? 0);
+  }
+  return difference === 0;
 }
 
 function buildIcs(villaId: VillaId, bookings: BookingRow[]) {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//Villagading//Booking Export//EN",
+    "PRODID:-//Villa Gading//Availability Export//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
   ];
 
   for (const booking of bookings) {
+    // Calendar importers need only blocked dates. Never export guest identity,
+    // contact details, or the payment-capable booking reference.
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${escapeIcs(booking.booking_reference)}@villagading`,
+      `UID:villa-${villaId}-${toIcsDate(booking.check_in)}-${toIcsDate(booking.check_out)}@villagading`,
       `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z")}`,
       `DTSTART;VALUE=DATE:${toIcsDate(booking.check_in)}`,
       `DTEND;VALUE=DATE:${toIcsDate(booking.check_out)}`,
-      `SUMMARY:${escapeIcs(`Villa ${villaId} booked`)}`,
-      `DESCRIPTION:${escapeIcs(`Booking reference: ${booking.booking_reference} | Guest: ${booking.guest_name}`)}`,
+      `SUMMARY:Villa ${villaId} unavailable`,
       "END:VEVENT",
     );
   }
@@ -63,63 +60,61 @@ function buildIcs(villaId: VillaId, bookings: BookingRow[]) {
 async function fetchBookings(supabaseUrl: string, serviceRoleKey: string, villaId: VillaId) {
   const endpoint =
     `${supabaseUrl}/rest/v1/bookings` +
-    "?select=check_in,check_out,booking_reference,guest_name" +
+    "?select=check_in,check_out" +
     `&villa_id=eq.${villaId}` +
     "&booking_status=neq.cancelled" +
     `&or=(booking_status.neq.pending_payment,expires_at.gt.${encodeURIComponent(new Date().toISOString())})` +
     "&order=check_in.asc";
 
   const res = await fetch(endpoint, {
-    headers: {
-      apikey: serviceRoleKey,
-      Authorization: `Bearer ${serviceRoleKey}`,
-    },
+    headers: { apikey: serviceRoleKey, Authorization: `Bearer ${serviceRoleKey}` },
   });
-
-  if (!res.ok) {
-    throw new Error(`Failed to fetch bookings (${res.status})`);
-  }
-
+  if (!res.ok) throw new Error(`Failed to fetch bookings (${res.status})`);
   return (await res.json()) as BookingRow[];
 }
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+  if (req.method !== "GET") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: { Allow: "GET", "Cache-Control": "no-store" },
+    });
   }
 
   try {
     const supabaseUrl = getEnv("SUPABASE_URL");
     const serviceRoleKey = getEnv("SUPABASE_SERVICE_ROLE_KEY");
-
+    const expectedToken = getEnv("BOOKING_ICAL_EXPORT_TOKEN");
     const url = new URL(req.url);
-    const villaParam = url.searchParams.get("villa");
-    const villaId = Number(villaParam) as VillaId;
 
+    if (!constantTimeEqual(url.searchParams.get("token") ?? "", expectedToken)) {
+      return new Response("Not found", {
+        status: 404,
+        headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+      });
+    }
+
+    const villaId = Number(url.searchParams.get("villa")) as VillaId;
     if (villaId !== 1 && villaId !== 2) {
-      return new Response(JSON.stringify({ error: "Invalid villa. Use villa=1 or villa=2." }), {
+      return new Response("Invalid villa", {
         status: 400,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
       });
     }
 
     const bookings = await fetchBookings(supabaseUrl, serviceRoleKey, villaId);
-    const ics = buildIcs(villaId, bookings);
-
-    return new Response(ics, {
-      status: 200,
+    return new Response(buildIcs(villaId, bookings), {
       headers: {
-        ...CORS_HEADERS,
-        "Cache-Control": "no-store",
+        "Content-Type": "text/calendar; charset=utf-8",
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (error) {
-    return new Response(
-      JSON.stringify({ error: String(error instanceof Error ? error.message : error) }),
-      {
-        status: 500,
-        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-      },
-    );
+    console.error("booking-ical-export failed", error);
+    return new Response("Calendar temporarily unavailable", {
+      status: 500,
+      headers: { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" },
+    });
   }
 });

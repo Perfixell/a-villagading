@@ -25,6 +25,7 @@ export async function createBooking(data: {
     error?: string;
     booking_reference?: string;
     total_price?: number;
+    payment_token?: string;
   };
 
   if (!res.ok) {
@@ -33,12 +34,13 @@ export async function createBooking(data: {
     );
   }
 
-  if (!payload.booking_reference || typeof payload.total_price !== "number") {
+  if (!payload.booking_reference || typeof payload.total_price !== "number" || !payload.payment_token) {
     throw new Error("The booking server returned an invalid response.");
   }
 
   return {
     booking_reference: payload.booking_reference,
     total_price: payload.total_price,
+    payment_token: payload.payment_token,
   };
 }

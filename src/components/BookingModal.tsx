@@ -76,6 +76,7 @@ export default function BookingModal({ isOpen, initialVillaId = 1, onClose, onOp
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [bookingReference, setBookingReference] = useState("");
+  const [paymentToken, setPaymentToken] = useState("");
   const [bookingCreated, setBookingCreated] = useState(false);
 
   const [guestName, setGuestName] = useState("");
@@ -109,6 +110,7 @@ export default function BookingModal({ isOpen, initialVillaId = 1, onClose, onOp
   const resetForm = useCallback(() => {
     setBookingCreated(false);
     setBookingReference("");
+    setPaymentToken("");
     setVilla(initialVillaName);
     setCheckIn("");
     setCheckOut("");
@@ -342,6 +344,7 @@ useEffect(() => {
       });
 
       setBookingReference(booking.booking_reference);
+      setPaymentToken(booking.payment_token);
       setTotalPrice(booking.total_price);
 
       setSubmitSuccess("Booking created. Continue to payment to confirm your stay.");
@@ -361,15 +364,15 @@ useEffect(() => {
   const handleStartPayment = async () => {
     setPaymentError("");
 
-    if (!bookingReference) {
-      setPaymentError("Missing booking reference. Please try booking again.");
+    if (!bookingReference || !paymentToken) {
+      setPaymentError("Missing secure payment details. Please create the booking again.");
       return;
     }
 
     setStartingPayment(true);
 
     try {
-      const result = await createMidtransTransaction(bookingReference);
+      const result = await createMidtransTransaction(bookingReference, paymentToken);
 
       if (result.status === "paid") {
         setSubmitSuccess("Payment already completed for this booking.");

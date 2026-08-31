@@ -19,6 +19,10 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // Existing effects intentionally reset modal/admin state after external
+      // auth and visibility changes. Keep those flows while retaining the
+      // remainder of the current hooks ruleset.
+      'react-hooks/set-state-in-effect': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
