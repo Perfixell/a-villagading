@@ -8,13 +8,13 @@ export type MidtransTransactionResponse = {
   message?: string;
 };
 
-export async function createMidtransTransaction(bookingReference: string) {
+export async function createMidtransTransaction(bookingReference: string, paymentToken: string) {
   const res = await fetch(`${FUNCTIONS_BASE}/midtrans-create-transaction`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ bookingReference }),
+    body: JSON.stringify({ bookingReference, paymentToken }),
   });
 
   const data = (await res.json()) as MidtransTransactionResponse & {

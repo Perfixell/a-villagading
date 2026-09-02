@@ -2,7 +2,7 @@ import { useScrollAnimation } from '../hooks/useScrollAnimation';
 
 const BASE = import.meta.env.BASE_URL;
 
-export default function BookingCTA() {
+export default function BookingCTA({ onBook }: { onBook: (villaId: 1 | 2) => void }) {
   const ref = useScrollAnimation();
 
   return (
@@ -37,22 +37,20 @@ export default function BookingCTA() {
         </p>
 
         <div className="animate-on-scroll delay-300 flex flex-col sm:flex-row gap-4 justify-center">
-          <a
-            href="https://www.booking.com/hotel/id/villa-gading-kab-gianyar.id.html"
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => onBook(1)}
             className="btn-gold text-sm px-10 py-4"
           >
             Book Villa Gading
-          </a>
-          <a
-            href="https://www.booking.com/hotel/id/villa-gading2.html"
-            target="_blank"
-            rel="noopener noreferrer"
+          </button>
+          <button
+            type="button"
+            onClick={() => onBook(2)}
             className="btn-outline text-sm px-10 py-4"
           >
             Book Villa Gading 2
-          </a>
+          </button>
         </div>
 
         {/* Trust signals */}

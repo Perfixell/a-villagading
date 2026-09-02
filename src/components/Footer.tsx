@@ -1,4 +1,4 @@
-import { MapPin, Phone, Instagram, Facebook, ExternalLink } from 'lucide-react';
+import { MapPin, Phone, Instagram, Facebook } from 'lucide-react';
 
 const navLinks = [
   { label: 'Home', href: '#home' },
@@ -11,6 +11,7 @@ const navLinks = [
 
 interface FooterProps {
   onOpenTerms: () => void;
+  onBook: (villaId: 1 | 2) => void;
 }
 
 function WhatsAppIcon({ size }: { size: number }) {
@@ -21,7 +22,7 @@ function WhatsAppIcon({ size }: { size: number }) {
   );
 }
 
-export default function Footer({ onOpenTerms }: FooterProps) {
+export default function Footer({ onOpenTerms, onBook }: FooterProps) {
   const handleNavClick = (href: string) => {
     const el = document.querySelector(href);
     if (el) el.scrollIntoView({ behavior: 'smooth' });
@@ -106,25 +107,23 @@ export default function Footer({ onOpenTerms }: FooterProps) {
             <ul className="flex flex-col gap-4">
               <li>
                 <p className="font-sans text-sm font-medium text-white/80 mb-1">Villa Gading</p>
-                <a
-                  href="https://www.booking.com/hotel/id/villa-gading-kab-gianyar.id.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => onBook(1)}
                   className="inline-flex items-center gap-1.5 font-sans text-xs text-white/50 hover:text-gold-300 transition-colors duration-300"
                 >
-                  Book on Booking.com <ExternalLink size={10} />
-                </a>
+                  Book this villa
+                </button>
               </li>
               <li>
                 <p className="font-sans text-sm font-medium text-white/80 mb-1">Villa Gading 2</p>
-                <a
-                  href="https://www.booking.com/hotel/id/villa-gading2.html"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => onBook(2)}
                   className="inline-flex items-center gap-1.5 font-sans text-xs text-white/50 hover:text-gold-300 transition-colors duration-300"
                 >
-                  Book on Booking.com <ExternalLink size={10} />
-                </a>
+                  Book this villa
+                </button>
               </li>
             </ul>
           </div>

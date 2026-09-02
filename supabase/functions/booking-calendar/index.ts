@@ -179,7 +179,8 @@ async function fetchSupabaseBookings(villaId: VillaId): Promise<SupabaseBookingR
     `${SUPABASE_URL}/rest/v1/bookings` +
     `?select=check_in,check_out` +
     `&villa_id=eq.${villaId}` +
-    `&booking_status=neq.cancelled`;
+    `&booking_status=neq.cancelled` +
+    `&or=(booking_status.neq.pending_payment,expires_at.gt.${encodeURIComponent(new Date().toISOString())})`;
 
   const res = await fetch(endpoint, {
     headers: {

@@ -25,6 +25,7 @@ const villa2Highlights = [
 ];
 
 interface VillaCardProps {
+  villaId: 1 | 2;
   name: string;
   tagline: string;
   description: string;
@@ -34,9 +35,10 @@ interface VillaCardProps {
   bookingUrl: string;
   bookLabel: string;
   delay?: string;
+  onBook: (villaId: 1 | 2) => void;
 }
 
-function VillaCard({ name, tagline, description, highlights, image, accentImage, bookingUrl, bookLabel, delay = '' }: VillaCardProps) {
+function VillaCard({ villaId, name, tagline, description, highlights, image, accentImage, bookingUrl, bookLabel, onBook, delay = '' }: VillaCardProps) {
   return (
     <div className={`animate-on-scroll ${delay} bg-white rounded-3xl overflow-hidden shadow-luxury hover:shadow-luxury-md transition-all duration-500 group flex flex-col`}>
       {/* Image */}
@@ -79,14 +81,13 @@ function VillaCard({ name, tagline, description, highlights, image, accentImage,
 
         {/* Actions */}
         <div className="flex flex-col sm:flex-row gap-3 mt-auto">
-          <a
-            href={bookingUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+          <button
+            type="button"
+            onClick={() => onBook(villaId)}
             className="btn-gold text-xs flex-1 justify-center"
           >
             {bookLabel}
-          </a>
+          </button>
           <a
             href={bookingUrl}
             target="_blank"
@@ -101,7 +102,7 @@ function VillaCard({ name, tagline, description, highlights, image, accentImage,
   );
 }
 
-export default function Villas() {
+export default function Villas({ onBook }: { onBook: (villaId: 1 | 2) => void }) {
   const ref = useScrollAnimation();
 
   return (
@@ -119,6 +120,7 @@ export default function Villas() {
         {/* Villa Cards */}
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-10">
           <VillaCard
+            villaId={1}
             name="Villa Gading"
             tagline="Original Estate"
             description="Villa Gading Mas Ubud is a peaceful retreat surrounded by lush rice fields and the cultural charm of Mas Village. Designed for travelers seeking relaxation without compromising on comfort, the villa features a private pool, spacious interiors, modern amenities, and warm Balinese hospitality. Located just minutes from Ubud's famous temples, rice terraces, cafés, restaurants, and art galleries."
@@ -127,9 +129,11 @@ export default function Villas() {
             accentImage={`${BASE}images/reviews/849064852.jpg`}
             bookingUrl="https://www.booking.com/hotel/id/villa-gading-kab-gianyar.id.html"
             bookLabel="Book Villa Gading"
+            onBook={onBook}
             delay="delay-100"
           />
           <VillaCard
+            villaId={2}
             name="Villa Gading 2"
             tagline="Sister Property"
             description="Villa Gading 2 offers the same peaceful atmosphere with elegant interiors, modern comforts, and easy access to everything Ubud has to offer. Designed for guests looking for privacy and relaxation, it provides an inviting tropical setting perfect for memorable holidays, family gatherings, and intimate retreats."
@@ -138,6 +142,7 @@ export default function Villas() {
             accentImage={`${BASE}images/reviews/471909276.jpg`}
             bookingUrl="https://www.booking.com/hotel/id/villa-gading2.html"
             bookLabel="Book Villa Gading 2"
+            onBook={onBook}
             delay="delay-200"
           />
         </div>

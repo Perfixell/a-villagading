@@ -50,6 +50,8 @@ jobs:
           VITE_ADMIN_ONLY: "true"
           VITE_SUPABASE_URL: https://qbjyjkeflhkepprtlfiq.supabase.co
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          # Turnstile site keys are public identifiers; the private secret stays in Supabase.
+          VITE_TURNSTILE_SITE_KEY: 0x4AAAAAAEDUU-K0EhQJt4fY
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v5
