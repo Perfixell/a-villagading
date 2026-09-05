@@ -10,7 +10,11 @@ const navLinks = [
   { label: 'Location', href: '#location' },
 ];
 
-export default function Navigation() {
+interface NavigationProps {
+  onBook: (villaId?: 1 | 2) => void;
+}
+
+export default function Navigation({ onBook }: NavigationProps) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -71,14 +75,13 @@ export default function Navigation() {
                   {link.label}
                 </a>
               ))}
-              <a
-                href="https://www.booking.com/hotel/id/villa-gading-kab-gianyar.id.html"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => onBook()}
                 className="btn-gold text-xs px-6 py-2.5"
               >
                 Book Now
-              </a>
+              </button>
             </div>
 
             <button
@@ -123,24 +126,20 @@ export default function Navigation() {
               ))}
             </div>
             <div className="mt-auto flex flex-col gap-3">
-              <a
-                href="https://www.booking.com/hotel/id/villa-gading-kab-gianyar.id.html"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
                 className="btn-gold text-center text-sm"
-                onClick={() => setMenuOpen(false)}
+                onClick={() => { setMenuOpen(false); onBook(1); }}
               >
                 Book Villa Gading
-              </a>
-              <a
-                href="https://www.booking.com/hotel/id/villa-gading2.html"
-                target="_blank"
-                rel="noopener noreferrer"
+              </button>
+              <button
+                type="button"
                 className="btn-outline-dark text-center text-sm"
-                onClick={() => setMenuOpen(false)}
+                onClick={() => { setMenuOpen(false); onBook(2); }}
               >
                 Book Villa Gading 2
-              </a>
+              </button>
             </div>
           </div>
         </div>

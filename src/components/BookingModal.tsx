@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import PhoneInput, { isValidPhoneNumber } from "react-phone-number-input";
@@ -8,9 +8,11 @@ import { calculateBookingPrice } from "../services/pricing";
 import { createBooking } from "../services/bookings";
 import { getBlockedDates } from "../services/bookingCalendar";
 import { createMidtransTransaction } from "../services/payments";
+import TurnstileWidget from "./TurnstileWidget";
 
 interface BookingModalProps {
   isOpen: boolean;
+  initialVillaId?: 1 | 2;
   onClose: () => void;
   onOpenTerms: () => void;
 }
@@ -22,6 +24,7 @@ type NightBreakdownItem = {
 };
 
 const MAX_GUESTS = 6;
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY?.trim() ?? "";
 
 function todayLocal() {
   const d = new Date();
@@ -65,13 +68,15 @@ function isDateRangeBlocked(start: string, end: string, blockedDates: string[]) 
   return false;
 }
 
-export default function BookingModal({ isOpen, onClose, onOpenTerms }: BookingModalProps) {
-  const [villa, setVilla] = useState("Villa Gading");
+export default function BookingModal({ isOpen, initialVillaId = 1, onClose, onOpenTerms }: BookingModalProps) {
+  const initialVillaName = initialVillaId === 2 ? "Villa Gading 2" : "Villa Gading";
+  const [villa, setVilla] = useState(initialVillaName);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
   const [bookingReference, setBookingReference] = useState("");
+  const [paymentToken, setPaymentToken] = useState("");
   const [bookingCreated, setBookingCreated] = useState(false);
 
   const [guestName, setGuestName] = useState("");
@@ -90,6 +95,8 @@ export default function BookingModal({ isOpen, onClose, onOpenTerms }: BookingMo
   const [saving, setSaving] = useState(false);
   const [startingPayment, setStartingPayment] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileResetSignal, setTurnstileResetSignal] = useState(0);
 
   const [emailError, setEmailError] = useState("");
   const [pricingError, setPricingError] = useState("");
@@ -100,10 +107,11 @@ export default function BookingModal({ isOpen, onClose, onOpenTerms }: BookingMo
   const villaId: 1 | 2 = villa === "Villa Gading" ? 1 : 2;
   const nights = nightlyBreakdown.length;
 
-  function resetForm() {
+  const resetForm = useCallback(() => {
     setBookingCreated(false);
     setBookingReference("");
-    setVilla("Villa Gading");
+    setPaymentToken("");
+    setVilla(initialVillaName);
     setCheckIn("");
     setCheckOut("");
     setAdults(2);
@@ -120,7 +128,8 @@ export default function BookingModal({ isOpen, onClose, onOpenTerms }: BookingMo
     setSubmitSuccess("");
     setPaymentError("");
     setAgreedToTerms(false);
-  }
+    setTurnstileToken("");
+  }, [initialVillaName]);
 
   function handleClose() {
     resetForm();
@@ -162,8 +171,10 @@ export default function BookingModal({ isOpen, onClose, onOpenTerms }: BookingMo
 useEffect(() => {
   if (!isOpen) {
     resetForm();
+  } else if (!bookingCreated) {
+    setVilla(initialVillaName);
   }
-}, [isOpen]);
+}, [isOpen, initialVillaName, bookingCreated, resetForm]);
 
   useEffect(() => {
     setPricingError("");
@@ -311,6 +322,11 @@ useEffect(() => {
       return;
     }
 
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      setSubmitError("Please complete the security check before continuing.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -324,9 +340,11 @@ useEffect(() => {
         check_in: checkIn,
         check_out: checkOut,
         special_requests: specialRequests.trim() || undefined,
+        turnstile_token: turnstileToken || undefined,
       });
 
       setBookingReference(booking.booking_reference);
+      setPaymentToken(booking.payment_token);
       setTotalPrice(booking.total_price);
 
       setSubmitSuccess("Booking created. Continue to payment to confirm your stay.");
@@ -334,6 +352,10 @@ useEffect(() => {
     } catch (err: unknown) {
       console.error("Booking Error:", err);
       setSubmitError(err instanceof Error ? err.message : "Failed to create booking.");
+      if (TURNSTILE_SITE_KEY) {
+        setTurnstileToken("");
+        setTurnstileResetSignal((value) => value + 1);
+      }
     } finally {
       setSaving(false);
     }
@@ -342,15 +364,15 @@ useEffect(() => {
   const handleStartPayment = async () => {
     setPaymentError("");
 
-    if (!bookingReference) {
-      setPaymentError("Missing booking reference. Please try booking again.");
+    if (!bookingReference || !paymentToken) {
+      setPaymentError("Missing secure payment details. Please create the booking again.");
       return;
     }
 
     setStartingPayment(true);
 
     try {
-      const result = await createMidtransTransaction(bookingReference);
+      const result = await createMidtransTransaction(bookingReference, paymentToken);
 
       if (result.status === "paid") {
         setSubmitSuccess("Payment already completed for this booking.");
@@ -531,28 +553,30 @@ if (bookingCreated) {
 
           <div>
             <label className="mb-2 block font-medium">Adults</label>
-            <input
-              type="number"
-              min={1}
-              max={MAX_GUESTS}
+            <select
               value={adults}
               onChange={(e) => setAdults(Number(e.target.value))}
               className="w-full rounded-xl border p-3"
               disabled={saving}
-            />
+            >
+              {Array.from({ length: MAX_GUESTS }, (_, index) => index + 1).map((count) => (
+                <option key={count} value={count}>{count}</option>
+              ))}
+            </select>
           </div>
 
           <div>
             <label className="mb-2 block font-medium">Children</label>
-            <input
-              type="number"
-              min={0}
-              max={MAX_GUESTS}
+            <select
               value={children}
               onChange={(e) => setChildren(Number(e.target.value))}
               className="w-full rounded-xl border p-3"
               disabled={saving}
-            />
+            >
+              {Array.from({ length: MAX_GUESTS + 1 }, (_, index) => index).map((count) => (
+                <option key={count} value={count}>{count}</option>
+              ))}
+            </select>
           </div>
 
           <div>
@@ -631,6 +655,17 @@ if (bookingCreated) {
               View Terms & Conditions
             </button>
           </div>
+
+          {TURNSTILE_SITE_KEY && (
+            <div className="md:col-span-2 rounded-2xl border border-gray-200 bg-white p-4">
+              <p className="mb-3 text-sm font-medium text-charcoal-200">Security check</p>
+              <TurnstileWidget
+                siteKey={TURNSTILE_SITE_KEY}
+                onTokenChange={setTurnstileToken}
+                resetSignal={turnstileResetSignal}
+              />
+            </div>
+          )}
         </div>
 
         {loadingPricing && checkIn && checkOut && (
@@ -695,7 +730,7 @@ if (bookingCreated) {
 
           <button
             onClick={handleContinue}
-            disabled={saving || loadingPricing || loadingBlockedDates || !agreedToTerms}
+            disabled={saving || loadingPricing || loadingBlockedDates || !agreedToTerms || (Boolean(TURNSTILE_SITE_KEY) && !turnstileToken)}
             className="w-full rounded-xl bg-black py-3 text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving

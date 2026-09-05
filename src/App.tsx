@@ -17,27 +17,34 @@ import TermsModal from './components/TermsModal';
 
 export default function App() {
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [bookingVillaId, setBookingVillaId] = useState<1 | 2>(1);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
+
+  const openBooking = (villaId: 1 | 2 = 1) => {
+    setBookingVillaId(villaId);
+    setIsBookingOpen(true);
+  };
 
 return (
     <div className="min-h-screen bg-cream-100 font-sans">
-      <Navigation />
+      <Navigation onBook={openBooking} />
       <main>
-        <Hero onBook={() => setIsBookingOpen(true)} />
+        <Hero onBook={() => openBooking()} />
         <About />
-        <Villas />
+        <Villas onBook={openBooking} />
         <Gallery />
         <WhyChoose />
         <Reviews />
         <Location />
-        <BookingCTA />
+        <BookingCTA onBook={openBooking} />
       </main>
 
-      <Footer onOpenTerms={() => setIsTermsOpen(true)} />
+      <Footer onOpenTerms={() => setIsTermsOpen(true)} onBook={openBooking} />
       <BackToTop />
 
       <BookingModal
         isOpen={isBookingOpen}
+        initialVillaId={bookingVillaId}
         onClose={() => setIsBookingOpen(false)}
         onOpenTerms={() => setIsTermsOpen(true)}
       />
