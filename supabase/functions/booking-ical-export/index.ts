@@ -39,6 +39,23 @@ function buildIcs(villaId: VillaId, bookings: BookingRow[]) {
     "METHOD:PUBLISH",
   ];
 
+  // Booking.com rejects otherwise-valid calendars that contain no VEVENTs.
+  // A fixed event in the distant past keeps an empty villa feed importable
+  // without blocking any current or future availability.
+  if (bookings.length === 0) {
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:villa-${villaId}-calendar-validation@villagading`,
+      "DTSTAMP:20990101T000000Z",
+      "DTSTART;VALUE=DATE:20990101",
+      "DTEND;VALUE=DATE:20990102",
+      "STATUS:CANCELLED",
+      "TRANSP:TRANSPARENT",
+      "SUMMARY:Calendar validation marker",
+      "END:VEVENT",
+    );
+  }
+
   for (const booking of bookings) {
     // Calendar importers need only blocked dates. Never export guest identity,
     // contact details, or the payment-capable booking reference.
